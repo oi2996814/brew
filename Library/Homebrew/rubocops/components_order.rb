@@ -1,8 +1,8 @@
-# typed: false
+# typed: true # rubocop:todo Sorbet/StrictSigil
 # frozen_string_literal: true
 
 require "ast_constants"
-require "rubocops/extend/formula"
+require "rubocops/extend/formula_cop"
 
 module RuboCop
   module Cop
@@ -14,13 +14,10 @@ module RuboCop
       class ComponentsOrder < FormulaCop
         extend AutoCorrector
 
-        def on_system_methods
-          @on_system_methods ||= [:intel, :arm, :macos, :linux, *MacOSVersions::SYMBOLS.keys].map do |m|
-            :"on_#{m}"
-          end
-        end
+        sig { override.params(formula_nodes: FormulaNodes).void }
+        def audit_formula(formula_nodes)
+          return if (body_node = formula_nodes.body_node).nil?
 
-        def audit_formula(_node, _class_node, _parent_class_node, body_node)
           @present_components, @offensive_nodes = check_order(FORMULA_COMPONENT_PRECEDENCE_LIST, body_node)
 
           component_problem @offensive_nodes[0], @offensive_nodes[1] if @offensive_nodes
@@ -30,6 +27,11 @@ module RuboCop
             [{ name: :resource, type: :block_call }],
             [{ name: :patch, type: :method_call }, { name: :patch, type: :block_call }],
           ]
+
+          head_blocks = find_blocks(body_node, :head)
+          head_blocks.each do |head_block|
+            check_block_component_order(FORMULA_COMPONENT_PRECEDENCE_LIST, head_block)
+          end
 
           on_system_methods.each do |on_method|
             on_method_blocks = find_blocks(body_node, on_method)
@@ -45,6 +47,8 @@ module RuboCop
 
           resource_blocks = find_blocks(body_node, :resource)
           resource_blocks.each do |resource_block|
+            check_block_component_order(FORMULA_COMPONENT_PRECEDENCE_LIST, resource_block)
+
             on_system_blocks = {}
 
             on_system_methods.each do |on_method|
@@ -62,7 +66,7 @@ module RuboCop
 
             @offensive_node = resource_block
 
-            on_system_bodies = []
+            on_system_bodies = T.let([], T::Array[[RuboCop::AST::BlockNode, RuboCop::AST::Node]])
 
             on_system_blocks.each_value do |blocks|
               blocks.each do |on_system_block|
@@ -72,7 +76,7 @@ module RuboCop
               end
             end
 
-            message = nil
+            message = T.let(nil, T.nilable(String))
             allowed_methods = [
               [:url, :sha256],
               [:url, :mirror, :sha256],
@@ -86,13 +90,13 @@ module RuboCop
               method_name = on_system_block.method_name
               child_nodes = on_system_body.begin_type? ? on_system_body.child_nodes : [on_system_body]
               if child_nodes.all? { |n| n.send_type? || n.block_type? || n.lvasgn_type? }
-                method_names = child_nodes.map do |node|
+                method_names = child_nodes.filter_map do |node|
                   next if node.lvasgn_type?
                   next if node.method_name == :patch
                   next if on_system_methods.include? node.method_name
 
                   node.method_name
-                end.compact
+                end
                 next if method_names.empty? || allowed_methods.include?(method_names)
               end
               offending_node(on_system_block)
@@ -101,7 +105,7 @@ module RuboCop
               break
             end
 
-            if message.present?
+            if message
               problem message
               next
             end
@@ -115,17 +119,31 @@ module RuboCop
           end
         end
 
+        def check_block_component_order(component_precedence_list, block)
+          @present_components, offensive_node = check_order(component_precedence_list, block.body)
+          component_problem(*offensive_node) if offensive_node
+        end
+
         def check_on_system_block_content(component_precedence_list, on_system_block)
+          if on_system_block.body.block_type? && !on_system_methods.include?(on_system_block.body.method_name)
+            offending_node(on_system_block)
+            problem "Nest `#{on_system_block.method_name}` blocks inside `#{on_system_block.body.method_name}` " \
+                    "blocks when there is only one inner block." do |corrector|
+              original_source = on_system_block.source.split("\n")
+              new_source = [original_source.second, original_source.first, *original_source.drop(2)]
+              corrector.replace(on_system_block.source_range, new_source.join("\n"))
+            end
+          end
           on_system_allowed_methods = %w[
-            depends_on
-            patch
-            resource
-            deprecate!
+            livecheck
+            keg_only
             disable!
+            deprecate!
+            depends_on
             conflicts_with
             fails_with
-            keg_only
-            ignore_missing_libraries
+            resource
+            patch
           ]
           on_system_allowed_methods += on_system_methods.map(&:to_s)
           _, offensive_node = check_order(component_precedence_list, on_system_block.body)
@@ -194,7 +212,7 @@ module RuboCop
           end
 
           # Check if each present_components is above rest of the present_components
-          offensive_nodes = nil
+          offensive_nodes = T.let(nil, T.nilable(T::Array[RuboCop::AST::Node]))
           present_components.take(present_components.size - 1).each_with_index do |preceding_component, p_idx|
             next if preceding_component.empty?
 
@@ -209,13 +227,13 @@ module RuboCop
         end
 
         # Method to report and correct component precedence violations.
-        def component_problem(c1, c2)
+        def component_problem(component1, component2)
           return if tap_style_exception? :components_order_exceptions
 
-          problem "`#{format_component(c1)}` (line #{line_number(c1)}) " \
-                  "should be put before `#{format_component(c2)}` " \
-                  "(line #{line_number(c2)})" do |corrector|
-            reorder_components(corrector, c1, c2)
+          problem "`#{format_component(component1)}` (line #{line_number(component1)}) " \
+                  "should be put before `#{format_component(component2)}` " \
+                  "(line #{line_number(component2)})" do |corrector|
+            reorder_components(corrector, component1, component2)
           end
         end
 

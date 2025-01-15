@@ -1,14 +1,16 @@
-# typed: false
 # frozen_string_literal: true
 
+require "cmd/update-report"
 require "description_cache_store"
 
-describe DescriptionCacheStore do
+RSpec.describe DescriptionCacheStore do
   subject(:cache_store) { described_class.new(database) }
 
-  let(:database) { double("database") }
+  let(:database) { instance_double(CacheStoreDatabase, "database") }
   let(:formula_name) { "test_name" }
   let(:description) { "test_description" }
+
+  before { allow(Homebrew::EnvConfig).to receive(:eval_all?).and_return(true) }
 
   describe "#update!" do
     it "sets the formula description" do
@@ -25,7 +27,7 @@ describe DescriptionCacheStore do
   end
 
   describe "#update_from_report!" do
-    let(:report) { double(select_formula_or_cask: [], empty?: false) }
+    let(:report) { instance_double(ReporterHub, select_formula_or_cask: [], empty?: false) }
 
     it "reads from the report" do
       expect(database).to receive(:empty?).at_least(:once).and_return(false)
@@ -57,10 +59,10 @@ describe DescriptionCacheStore do
   describe CaskDescriptionCacheStore do
     subject(:cache_store) { described_class.new(database) }
 
-    let(:database) { double("database") }
+    let(:database) { instance_double(CacheStoreDatabase, "database") }
 
     describe "#update_from_report!" do
-      let(:report) { double(select_formula_or_cask: [], empty?: false) }
+      let(:report) { instance_double(ReporterHub, select_formula_or_cask: [], empty?: false) }
 
       it "reads from the report" do
         expect(database).to receive(:empty?).at_least(:once).and_return(false)

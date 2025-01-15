@@ -2,7 +2,7 @@
 
 ## Install previous versions of formulae
 
-Some formulae in `homebrew/core` are made available as [versioned formulae](Versions.md) using a special naming format, e.g. `gcc@7`. If the version you're looking for isn't available, consider using `brew extract`.
+Some formulae in `homebrew/core` are made available as [versioned formulae](Versions.md) using a special naming format, e.g. `gcc@9`. If the version you're looking for isn't available, consider using `brew extract`.
 
 ## Quickly remove something from Homebrew's prefix
 
@@ -39,7 +39,7 @@ brew install --only-dependencies <formula>
 
 ## Use the interactive Homebrew shell
 
-```sh
+```console
 $ brew irb
 ==> Interactive Homebrew Shell
 Example commands available with: `brew irb --examples`
@@ -65,7 +65,31 @@ The beer emoji can also be replaced with other character(s):
 export HOMEBREW_INSTALL_BADGE="☕️ 🐸"
 ```
 
+## Migrate a Homebrew installation to a new location
+
+Running `brew bundle dump` will record an installation to a `Brewfile` and `brew bundle install` will install from a `Brewfile`. See `brew bundle --help` for more details.
+
+## Appoint Homebrew Cask to manage a manually-installed app
+
+Run `brew install --cask` with the `--adopt` switch:
+
+```console
+$ brew install --cask --adopt textmate
+==> Downloading https://github.com/textmate/textmate/releases/download/v2.0.23/TextMate_2.0.23.tbz
+...
+==> Installing Cask textmate
+==> Adopting existing App at '/Applications/TextMate.app'
+==> Linking Binary 'mate' to '/opt/homebrew/bin/mate'
+🍺  textmate was successfully installed!
+```
+
 ## Editor plugins
+
+### Visual Studio Code
+
+- [Brewfile](https://marketplace.visualstudio.com/items?itemName=sharat.vscode-brewfile) adds Ruby syntax highlighting for [Homebrew Bundle](https://github.com/Homebrew/homebrew-bundle) `Brewfile`s.
+
+- [Brew Services](https://marketplace.visualstudio.com/items?itemName=beauallison.brew-services) is an extension for starting and stopping Homebrew services.
 
 ### Sublime Text
 
@@ -81,6 +105,19 @@ export HOMEBREW_INSTALL_BADGE="☕️ 🐸"
 
 - [pcmpl-homebrew](https://github.com/hiddenlotus/pcmpl-homebrew) provides completion for emacs shell-mode and eshell-mode.
 
-### Atom
+## macOS Terminal.app: Enable the "Open man Page" contextual menu item
 
-- [language-homebrew-formula](https://atom.io/packages/language-homebrew-formula) adds highlighting and diff support (with the [language-diff](https://atom.io/packages/language-diff) plugin).
+In the macOS Terminal, you can right-click on a command name (like `ls` or `tar`) and pop open its manpage in a new window by selecting "Open man Page".
+
+Terminal needs an extra hint on where to find manpages installed by Homebrew because it doesn't load normal dotfiles like `~/.bash_profile` or `~/.zshrc`.
+
+```sh
+sudo mkdir -p /usr/local/etc/man.d
+echo "MANPATH /opt/homebrew/share/man" | sudo tee -a /usr/local/etc/man.d/homebrew.man.conf
+```
+
+If you're using Homebrew on macOS Intel, you should also fix permissions afterwards with:
+
+```sh
+sudo chown -R "${USER}" /usr/local/etc
+```
